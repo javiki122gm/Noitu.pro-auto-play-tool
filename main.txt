@@ -1,0 +1,118 @@
+// Set a long expiration for the cookie
+Cookies.set("Ad", makeid(), { expires: Infinity });
+
+const dashboard = document.createElement('div');
+dashboard.id = 'dashboard';
+Object.assign(dashboard.style, {
+    position: 'fixed',
+    top: '10px',
+    right: '10px',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    color: 'white',
+    padding: '15px',
+    borderRadius: '10px',
+    fontSize: '16px',
+    zIndex: '10000',
+    maxWidth: '300px'
+});
+document.body.appendChild(dashboard);
+
+const timeStampDisplay = document.createElement('div');
+const winsDisplay = document.createElement('div');
+const lossesDisplay = document.createElement('div');
+dashboard.append(timeStampDisplay, winsDisplay, lossesDisplay);
+
+let startTime = Date.now();
+let totalTime = 0;
+let wins = 0;
+let losses = 0;
+
+function updateDashboard() {
+    const now = Date.now();
+    totalTime = Math.floor((now - startTime) / 1000);
+    const hours = String(Math.floor(totalTime / 3600)).padStart(2, '0');
+    const minutes = String(Math.floor((totalTime % 3600) / 60)).padStart(2, '0');
+    const secs = String(totalTime % 60).padStart(2, '0');
+    timeStampDisplay.textContent = `Time spent: ${hours}:${minutes}:${secs}`;
+    winsDisplay.textContent = `Wins: ${wins}`;
+    lossesDisplay.textContent = `Losses: ${losses}`;
+}
+
+setInterval(updateDashboard, 1000);
+
+const currentWordSpan = document.getElementById('currentWord');
+const textInput = document.getElementById('text');
+
+const handleMutation = (mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.type === 'childList' && !textInput.disabled) {
+            const currentWord = currentWordSpan.innerText.trim();
+            fetch(`https://noitu.pro/answer?word=${encodeURIComponent(currentWord)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.nextWord) {
+                        const valueToSet = data.win ? currentWord.split(' ')[0] : data.nextWord.tail;
+                        textInput.value = valueToSet;
+                        textInput.dispatchEvent(new Event('input', { bubbles: true }));
+                        textInput.dispatchEvent(new KeyboardEvent('keydown', {
+                            bubbles: true,
+                            cancelable: true,
+                            key: 'Enter',
+                            keyCode: 13
+                        }));
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+    });
+};
+
+const observer = new MutationObserver(handleMutation);
+observer.observe(currentWordSpan, { childList: true });
+
+const handleModalMutation = (mutations) => {
+    mutations.forEach((mutation) => {
+        const modal = document.querySelector('.swal-modal');
+        const overlay = document.querySelector('.swal-overlay');
+
+        if (modal) {
+            const title = modal.querySelector('.swal-title')?.textContent.trim();
+            const text = modal.querySelector('.swal-text')?.textContent.trim();
+
+            if (title && text) {
+                let isWin = title.includes('Trò chơi kết thúc') && text.includes('Bạn đã dành chiến thắng');
+                let isLoss = title.includes('Trò chơi kết thúc') && text.includes('Bạn đã thua');
+                
+                if (isWin || isLoss) {
+                    const playAgainButton = modal.querySelector('.swal-button.swal-button--confirm');
+                    if (playAgainButton) {
+                        playAgainButton.click();
+                        if (isWin) {
+                            wins++;
+                            displayMessage("You win!", 'green');
+                        } else {
+                            losses++;
+                            displayMessage("You lose!", 'red');
+                        }
+                        modal.remove();
+                        if (overlay) overlay.remove();
+                    }
+                }
+            }
+        }
+    });
+};
+
+const modalObserver = new MutationObserver(handleModalMutation);
+modalObserver.observe(document.body, { childList: true, subtree: true });
+
+function displayMessage(message, color) {
+    const msgElem = document.createElement('div');
+    msgElem.textContent = message;
+    Object.assign(msgElem.style, {
+        color: color,
+        fontWeight: 'bold'
+    });
+    dashboard.appendChild(msgElem);
+    setTimeout(() => msgElem.remove(), 3000);
+}
